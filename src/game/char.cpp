@@ -1782,9 +1782,15 @@ void CHARACTER::SetPlayerProto(const TPlayerTable * t)
 
 	ComputePoints();
 
+#ifdef FIX_NEG_HP
+	SetHP(GetMaxHP());
+	SetSP(GetMaxSP());
+	SetStamina(GetMaxStamina());
+#else
 	SetHP(t->hp);
 	SetSP(t->sp);
 	SetStamina(t->stamina);
+#endif
 
 	//GM일때 보호모드  
 	if (!test_server)

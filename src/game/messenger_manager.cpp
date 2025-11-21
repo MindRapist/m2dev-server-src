@@ -236,11 +236,33 @@ void MessengerManager::__RemoveFromList(MessengerManager::keyA account, Messenge
 	m_Relation[account].erase(companion);
 	m_InverseRelation[companion].erase(account);
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	m_Relation[companion].erase(account);
+	m_InverseRelation[account].erase(companion);
+#endif
+
 	LPCHARACTER ch = CHARACTER_MANAGER::instance().FindPC(account.c_str());
 	LPDESC d = ch ? ch->GetDesc() : NULL;
 
 	if (d)
 		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("<메신져> %s 님을 메신저에서 삭제하였습니다."), companion.c_str());
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	LPCHARACTER tch = CHARACTER_MANAGER::Instance().FindPC(companion.c_str());
+	
+	if (tch && tch->GetDesc())
+	{
+		TPacketGCMessenger p;
+		p.header		= HEADER_GC_MESSENGER;
+		p.subheader		= MESSENGER_SUBHEADER_GC_REMOVE_FRIEND;
+		p.size			= sizeof(TPacketGCMessenger) + sizeof(BYTE) + account.size();
+
+		BYTE bLen		= account.size();
+		tch->GetDesc()->BufferedPacket(&p, sizeof(p));
+		tch->GetDesc()->BufferedPacket(&bLen, sizeof(BYTE));
+		tch->GetDesc()->Packet(account.c_str(), account.size());
+	}
+#endif
 }
 
 bool MessengerManager::IsInList(MessengerManager::keyA account, MessengerManager::keyA companion) // Fix
@@ -274,8 +296,13 @@ void MessengerManager::RemoveFromList(MessengerManager::keyA account, MessengerM
 			// get_table_postfix(), account.c_str(), companion.c_str());
 
 	// Fix
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	DBManager::instance().Query("DELETE FROM messenger_list%s WHERE (account='%s' AND companion = '%s') OR (account = '%s' AND companion = '%s')",
+			get_table_postfix(), account.c_str(), companionEscaped, companionEscaped, account.c_str());
+#else
 	DBManager::instance().Query("DELETE FROM messenger_list%s WHERE account='%s' AND companion = '%s'",
 			get_table_postfix(), account.c_str(), companionEscaped);
+#endif
 
 	__RemoveFromList(account, companion);
 
