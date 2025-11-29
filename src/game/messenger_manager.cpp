@@ -12,6 +12,18 @@
 #include "char_manager.h"
 #include "questmanager.h"
 
+#if defined(CROSS_CHANNEL_FRIEND_REQUEST) && defined(FIX_MESSENGER_ACTION_SYNC)
+#include <vector>
+#include <cstdarg>
+
+#include "locale_service.h"
+#endif
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+static char __account[CHARACTER_NAME_MAX_LEN * 2 + 1];
+static char __companion[CHARACTER_NAME_MAX_LEN * 2 + 1];
+#endif
+
 MessengerManager::MessengerManager()
 {
 }
@@ -42,6 +54,13 @@ void MessengerManager::Login(MessengerManager::keyA account)
 {
 	if (m_set_loginAccount.find(account) != m_set_loginAccount.end())
 		return;
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	DBManager::instance().EscapeString(__account, sizeof(__account), account.c_str(), account.size());
+
+	if (account.compare(__account))
+		return;
+#endif
 
 	DBManager::instance().FuncQuery(std::bind(&MessengerManager::LoadList, this, std::placeholders::_1),
 			"SELECT account, companion FROM messenger_list%s WHERE account='%s'", get_table_postfix(), account.c_str());
@@ -112,11 +131,270 @@ void MessengerManager::Logout(MessengerManager::keyA account)
 	//m_map_stMobile.erase(account);
 }
 
+#if defined(CROSS_CHANNEL_FRIEND_REQUEST) || defined(FIX_MESSENGER_ACTION_SYNC)
+#if defined(CROSS_CHANNEL_FRIEND_REQUEST) && defined(FIX_MESSENGER_ACTION_SYNC)
+std::string MessengerManager::NormalizeCharacterName(const char* name)
+{
+	if (!name)
+		return std::string();
+
+	// P2P_MANAGER::Find does trim_and_lower for Brazil — match that here.
+	if (LC_IsBrazil())
+	{
+		char tmp[CHARACTER_NAME_MAX_LEN + 1];
+		trim_and_lower(name, tmp, sizeof(tmp));
+		return std::string(tmp);
+	}
+
+	return std::string(name);
+}
+
+uint32_t MessengerManager::FriendRequestCRC(const char* a, const char* b)
+{
+	std::string na = NormalizeCharacterName(a);
+	std::string nb = NormalizeCharacterName(b);
+
+	uint32_t dw1 = GetCRC32(na.c_str(), na.size());
+	uint32_t dw2 = GetCRC32(nb.c_str(), nb.size());
+
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%u:%u", dw1, dw2);
+	buf[sizeof(buf) - 1] = '\0';
+
+	return GetCRC32(buf, strlen(buf));
+}
+#endif
+
+void MessengerManager::NotifyRequesterOrLocal(const char* requesterName, LPCHARACTER ch, const char* fmt, ...)
+{
+	if (!fmt)
+		return;
+
+	char msgBuf[256];
+
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(msgBuf, sizeof(msgBuf), fmt, ap);
+	va_end(ap);
+
+	if (ch)
+	{
+		// Send formatted message locally. Use simple "%s" to avoid LC_TEXT runtime issue.
+		ch->ChatPacket(CHAT_TYPE_INFO, "%s", msgBuf);
+
+		return;
+	}
+
+	// No local character -> relay to requester via P2P if possible.
+	if (!requesterName)
+		return;
+
+	TPacketGCChat pack;
+
+	pack.header = HEADER_GC_CHAT;
+	pack.size = sizeof(TPacketGCChat) + (int)strlen(msgBuf);
+	pack.type = CHAT_TYPE_INFO;
+	pack.id = 0;
+
+	std::vector<char> payload(pack.size);
+
+	memcpy(payload.data(), &pack, sizeof(pack));
+	memcpy(payload.data() + sizeof(pack), msgBuf, strlen(msgBuf));
+
+	MessengerManager::SendP2PInfoToRequester(requesterName, payload.data(), pack.size);
+}
+
+void MessengerManager::SendP2PInfoToRequester(const char* requesterName, const void* gcPayload, int gcPayloadSize)
+{
+	if (!requesterName || !gcPayload || gcPayloadSize <= 0)
+		return;
+
+	CCI* pkCCI = P2P_MANAGER::instance().Find(requesterName);
+
+	if (!pkCCI || !pkCCI->pkDesc)
+		return;
+
+	// Build P2P relay packet: TPacketGGRelay + gcPayload
+	const int totalSize = sizeof(TPacketGGRelay) + gcPayloadSize;
+	std::vector<char> buf;
+	buf.resize(totalSize);
+
+	TPacketGGRelay* relay = reinterpret_cast<TPacketGGRelay*>(buf.data());
+	relay->bHeader = HEADER_GG_RELAY;
+	strlcpy(relay->szName, requesterName, sizeof(relay->szName));
+	relay->lSize = gcPayloadSize;
+
+	memcpy(buf.data() + sizeof(TPacketGGRelay), gcPayload, gcPayloadSize);
+
+	// Send to the peer that hosts the requester.
+	pkCCI->pkDesc->Packet(buf.data(), totalSize);
+}
+#endif
+
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+void MessengerManager::RegisterRequestToAdd(const char* name, const char* targetName)
+{
+	LPCHARACTER ch = CHARACTER_MANAGER::Instance().FindPC(name);
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	// In-memory quick check (fast, works if lists are loaded)
+	if (IsInList(name, targetName) || IsInList(targetName, name))
+	{
+		MessengerManager::NotifyRequesterOrLocal(name, ch, LC_TEXT("[Friends] You are already friends with %s."), targetName);
+
+		return;
+	}
+#endif
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	uint32_t dwComplex = FriendRequestCRC(name, targetName);
+#else
+	uint32_t dw1 = GetCRC32(name, strlen(name));
+	uint32_t dw2 = GetCRC32(targetName, strlen(targetName));
+
+	char buf[64]{ 0, };
+	snprintf(buf, sizeof(buf), "%u:%u", dw1, dw2);
+	buf[63] = '\0';
+
+	uint32_t dwComplex = GetCRC32(buf, strlen(buf));
+#endif
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	uint32_t dwComplexRev = FriendRequestCRC(targetName, name);
+
+	// Check if this requester already sent the same request
+	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
+	{
+		MessengerManager::NotifyRequesterOrLocal(name, ch, LC_TEXT("[Friends] You already sent a friend request to %s."), targetName);
+
+		return;
+	}
+
+	// Check if target already sent a request to requester (reverse)
+	if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
+	{
+		MessengerManager::NotifyRequesterOrLocal(name, ch, LC_TEXT("[Friends] %s has already sent you a friend request."), targetName);
+
+		sys_log(0, "MessengerManager::RegisterRequestToAdd: Duplicate friend request between %s and %s YOU DUMDUM!", name, targetName);
+		return;
+	}
+#endif
+
+	m_set_requestToAdd.insert(dwComplex);
+}
+
+// stage 1: starts on the core where "ch" resides. Validate ch and move to stage 2
+void MessengerManager::P2PRequestToAdd_Stage1(LPCHARACTER ch, const char* targetName)
+{
+	LPCHARACTER pkTarget = CHARACTER_MANAGER::Instance().FindPC(targetName);
+
+	if (!pkTarget)
+	{
+		if (!ch || !ch->IsPC())
+			return;
+
+		if (quest::CQuestManager::instance().GetPCForce(ch->GetPlayerID())->IsRunning() == true)
+		{
+			ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("상대방이 친구 추가를 받을 수 없는 상태입니다."));
+
+			return;
+		}
+
+		TPacketGGMessengerRequest p2pp{};
+
+		p2pp.header = HEADER_GG_MESSENGER_REQUEST_ADD;
+
+		strlcpy(p2pp.account, ch->GetName(), CHARACTER_NAME_MAX_LEN + 1);
+		strlcpy(p2pp.target, targetName, CHARACTER_NAME_MAX_LEN + 1);
+
+		P2P_MANAGER::Instance().Send(&p2pp, sizeof(TPacketGGMessengerRequest));
+	}
+	else // if we have both, just continue normally
+		RequestToAdd(ch, pkTarget);
+}
+
+// stage 2: ends up on the core where the target resides
+void MessengerManager::P2PRequestToAdd_Stage2(const char* characterName, const char* targetName)
+{
+	if (!targetName || !characterName)
+		return;
+
+	LPCHARACTER target = CHARACTER_MANAGER::Instance().FindPC(targetName);
+
+	if (!target || !target->IsPC())
+		return;
+
+	LPCHARACTER ch = CHARACTER_MANAGER::Instance().FindPC(characterName);
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	if (0 == strncmp(characterName, targetName, CHARACTER_NAME_MAX_LEN))
+	{
+		MessengerManager::NotifyRequesterOrLocal(characterName, ch, LC_TEXT("[Friends] You cannot add yourself as a friend."));
+
+		return;
+	}
+#endif
+
+	if (quest::CQuestManager::instance().GetPCForce(target->GetPlayerID())->IsRunning())
+		return;
+
+	if (target->IsBlockMode(BLOCK_MESSENGER_INVITE))
+	{
+		MessengerManager::NotifyRequesterOrLocal(characterName, ch, LC_TEXT("상대방이 메신져 추가 거부 상태입니다."));
+
+		return;
+	}
+
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	// In-memory quick check (fast, works if lists are loaded)
+	if (IsInList(characterName, targetName) || IsInList(targetName, characterName))
+	{
+		MessengerManager::NotifyRequesterOrLocal(characterName, ch, LC_TEXT("[Friends] You are already friends with %s."), targetName);
+
+		return;
+	}
+
+	uint32_t dwComplex = FriendRequestCRC(characterName, targetName);
+	uint32_t dwComplexRev = FriendRequestCRC(targetName, characterName);
+
+	// Check if this requester already sent the same request
+	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
+	{
+		MessengerManager::NotifyRequesterOrLocal(characterName, ch, LC_TEXT("[Friends] You already sent a friend request to %s."), targetName);
+
+		return;
+	}
+
+	// Check if target already sent a request to requester (reverse)
+	if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
+	{
+		MessengerManager::NotifyRequesterOrLocal(characterName, ch, LC_TEXT("[Friends] %s has already sent you a friend request."), targetName);
+
+		sys_log(0, "MessengerManager::P2PRequestToAdd_Stage2 : request already exist %s -> %s YOU DUMDUM!", characterName, targetName);
+		return;
+	}
+#endif
+
+	MessengerManager::Instance().RegisterRequestToAdd(characterName, targetName);
+	target->ChatPacket(CHAT_TYPE_COMMAND, "messenger_auth %s", characterName);
+}
+#endif
+
 void MessengerManager::RequestToAdd(LPCHARACTER ch, LPCHARACTER target)
 {
 	if (!ch->IsPC() || !target->IsPC())
 		return;
-	
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	if (ch->GetPlayerID() == target->GetPlayerID())
+	{
+		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You cannot add yourself as a friend."));
+
+		return;
+	}
+#endif
+
 	if (quest::CQuestManager::instance().GetPCForce(ch->GetPlayerID())->IsRunning() == true)
 	{
 	    ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("상대방이 친구 추가를 받을 수 없는 상태입니다."));
@@ -126,12 +404,43 @@ void MessengerManager::RequestToAdd(LPCHARACTER ch, LPCHARACTER target)
 	if (quest::CQuestManager::instance().GetPCForce(target->GetPlayerID())->IsRunning() == true)
 		return;
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	std::string requester = ch->GetName();
+	std::string companion = target->GetName();
+
+	// In-memory quick check (fast, works if lists are loaded)
+	if (IsInList(requester, companion) || IsInList(companion, requester))
+	{
+		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), companion.c_str());
+		return;
+	}
+
+	DWORD dwComplex = FriendRequestCRC(ch->GetName(), target->GetName());
+	DWORD dwComplexRev = FriendRequestCRC(target->GetName(), ch->GetName());
+
+	// Check if this requester already sent the same request
+	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
+	{
+		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You already sent a friend request to %s."), companion.c_str());
+		return;
+	}
+
+	// Check if target already sent a request to requester (reverse)
+	if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
+	{
+		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), companion.c_str());
+		sys_log(0, "MessengerManager::RequestToAdd: Duplicate friend request between %s and %s YOU DUMDUM!", requester.c_str(), companion.c_str());
+
+		return;
+	}
+#else
 	DWORD dw1 = GetCRC32(ch->GetName(), strlen(ch->GetName()));
 	DWORD dw2 = GetCRC32(target->GetName(), strlen(target->GetName()));
 
 	char buf[64];
 	snprintf(buf, sizeof(buf), "%u:%u", dw1, dw2);
 	DWORD dwComplex = GetCRC32(buf, strlen(buf));
+#endif
 
 	m_set_requestToAdd.insert(dwComplex);
 
@@ -179,6 +488,19 @@ bool MessengerManager::AuthToAdd(MessengerManager::keyA account, MessengerManage
 
 	m_set_requestToAdd.erase(dwComplex);
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	// In-memory quick check (fast, works if lists are loaded)
+	if (IsInList(account, companion) || IsInList(companion, account))
+	{
+		LPCHARACTER acc_ch = CHARACTER_MANAGER::instance().FindPC(account.c_str());
+
+		if (acc_ch)
+			acc_ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), companion.c_str());
+
+		return false;
+	}
+#endif
+
 	if (!bDeny)
 	{
 		AddToList(companion, account);
@@ -192,6 +514,11 @@ void MessengerManager::__AddToList(MessengerManager::keyA account, MessengerMana
 {
 	m_Relation[account].insert(companion);
 	m_InverseRelation[companion].insert(account);
+//#ifdef FIX_MESSENGER_ACTION_SYNC
+//	m_Relation[companion].insert(account);
+//	m_InverseRelation[account].insert(companion);
+//#endif
+
 
 	LPCHARACTER ch = CHARACTER_MANAGER::instance().FindPC(account.c_str());
 	LPDESC d = ch ? ch->GetDesc() : NULL;
@@ -203,7 +530,11 @@ void MessengerManager::__AddToList(MessengerManager::keyA account, MessengerMana
 
 	LPCHARACTER tch = CHARACTER_MANAGER::instance().FindPC(companion.c_str());
 
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+	if (tch || P2P_MANAGER::Instance().Find(companion.c_str()))
+#else
 	if (tch)
+#endif
 		SendLogin(account, companion);
 	else
 		SendLogout(account, companion);
@@ -217,7 +548,16 @@ void MessengerManager::AddToList(MessengerManager::keyA account, MessengerManage
 	if (m_Relation[account].find(companion) != m_Relation[account].end())
 		return;
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	DBManager::instance().EscapeString(__account, sizeof(__account), account.c_str(), account.size());
+	DBManager::instance().EscapeString(__companion, sizeof(__companion), companion.c_str(), companion.size());
+
+	if (account.compare(__account) || companion.compare(__companion))
+		return;
+#endif
+
 	sys_log(0, "Messenger Add %s %s", account.c_str(), companion.c_str());
+
 	DBManager::instance().Query("INSERT INTO messenger_list%s VALUES ('%s', '%s')", 
 			get_table_postfix(), account.c_str(), companion.c_str());
 
@@ -235,7 +575,6 @@ void MessengerManager::__RemoveFromList(MessengerManager::keyA account, Messenge
 {
 	m_Relation[account].erase(companion);
 	m_InverseRelation[companion].erase(account);
-
 #ifdef FIX_MESSENGER_ACTION_SYNC
 	m_Relation[companion].erase(account);
 	m_InverseRelation[account].erase(companion);
@@ -249,7 +588,7 @@ void MessengerManager::__RemoveFromList(MessengerManager::keyA account, Messenge
 
 #ifdef FIX_MESSENGER_ACTION_SYNC
 	LPCHARACTER tch = CHARACTER_MANAGER::Instance().FindPC(companion.c_str());
-	
+
 	if (tch && tch->GetDesc())
 	{
 		TPacketGCMessenger p;
@@ -287,8 +626,17 @@ void MessengerManager::RemoveFromList(MessengerManager::keyA account, MessengerM
 	if (!IsInList(account, companion)) // Fix
 		return;
 	
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	DBManager::instance().EscapeString(__account, sizeof(__account), account.c_str(), account.size());
+    DBManager::instance().EscapeString(__companion, sizeof(__companion), companion.c_str(), companion.size());
+  
+    if (account.compare(__account) || companion.compare(__companion))
+        return;
+#else
 	char companionEscaped[CHARACTER_NAME_MAX_LEN * 2 + 1];
-		DBManager::instance().EscapeString(companionEscaped, sizeof(companionEscaped), companion.c_str(), companion.length());
+
+	DBManager::instance().EscapeString(companionEscaped, sizeof(companionEscaped), companion.c_str(), companion.length());
+#endif
 
 	sys_log(1, "Messenger Remove %s %s", account.c_str(), companion.c_str());
 	
@@ -298,10 +646,10 @@ void MessengerManager::RemoveFromList(MessengerManager::keyA account, MessengerM
 	// Fix
 #ifdef FIX_MESSENGER_ACTION_SYNC
 	DBManager::instance().Query("DELETE FROM messenger_list%s WHERE (account='%s' AND companion = '%s') OR (account = '%s' AND companion = '%s')",
-			get_table_postfix(), account.c_str(), companionEscaped, companionEscaped, account.c_str());
+			get_table_postfix(), account.c_str(), companion.c_str(), companion.c_str(), account.c_str());
 #else
 	DBManager::instance().Query("DELETE FROM messenger_list%s WHERE account='%s' AND companion = '%s'",
-			get_table_postfix(), account.c_str(), companionEscaped);
+			get_table_postfix(), account.c_str(), companion.c_str());
 #endif
 
 	__RemoveFromList(account, companion);
@@ -318,6 +666,13 @@ void MessengerManager::RemoveAllList(keyA account)
 {
 	std::set<keyT>	company(m_Relation[account]);
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+    DBManager::instance().EscapeString(__account, sizeof(__account), account.c_str(), account.size());
+
+	if (account.compare(__account))
+        	return;
+#endif
+
 	/* SQL Data 삭제 */
 	DBManager::instance().Query("DELETE FROM messenger_list%s WHERE account='%s' OR companion='%s'",
 			get_table_postfix(), account.c_str(), account.c_str());
@@ -328,6 +683,9 @@ void MessengerManager::RemoveAllList(keyA account)
 			iter++ )
 	{
 		this->RemoveFromList(account, *iter);
+#ifdef FIX_MESSENGER_ACTION_SYNC
+		this->RemoveFromList(*iter, account);
+#endif
 	}
 
 	/* 복사한 데이타 삭제 */

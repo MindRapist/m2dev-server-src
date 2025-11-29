@@ -986,7 +986,13 @@ int CInputMain::Messenger(LPCHARACTER ch, const char* c_pData, size_t uiBytes)
 				LPCHARACTER tch = CHARACTER_MANAGER::instance().FindPC(name);
 
 				if (!tch)
+				{
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+					MessengerManager::instance().P2PRequestToAdd_Stage1(ch, name);
+#else
 					ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("%s 님은 접속되 있지 않습니다."), name);
+#endif
+				}
 				else
 				{
 					if (tch == ch) // 자신은 추가할 수 없다.
@@ -1014,6 +1020,9 @@ int CInputMain::Messenger(LPCHARACTER ch, const char* c_pData, size_t uiBytes)
 				char char_name[CHARACTER_NAME_MAX_LEN + 1];
 				strlcpy(char_name, c_pData, sizeof(char_name));
 				MessengerManager::instance().RemoveFromList(ch->GetName(), char_name);
+#ifdef FIX_MESSENGER_ACTION_SYNC
+        		MessengerManager::instance().RemoveFromList(char_name, ch->GetName());//friend removed from companion too.
+#endif
 			}
 			return CHARACTER_NAME_MAX_LEN;
 

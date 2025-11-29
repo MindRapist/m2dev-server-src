@@ -20,6 +20,22 @@ class MessengerManager : public singleton<MessengerManager>
 		void	Logout(keyA account);
 
 		void	RequestToAdd(LPCHARACTER ch, LPCHARACTER target);
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+		void	RegisterRequestToAdd(const char* name, const char* targetName);
+		void	P2PRequestToAdd_Stage1(LPCHARACTER ch, const char* targetName);
+		void	P2PRequestToAdd_Stage2(const char* characterName, const char* targetName);
+#endif
+
+#if defined(CROSS_CHANNEL_FRIEND_REQUEST) || defined(FIX_MESSENGER_ACTION_SYNC)
+#if defined(CROSS_CHANNEL_FRIEND_REQUEST) && defined(FIX_MESSENGER_ACTION_SYNC)
+		// Canonicalize and compute friend-request CRCs so every core computes the same key.
+		static inline std::string NormalizeCharacterName(const char* name);
+		static inline uint32_t FriendRequestCRC(const char* a, const char* b);
+#endif
+
+		static void NotifyRequesterOrLocal(const char* requesterName, LPCHARACTER ch, const char* fmt, ...);
+		static void	SendP2PInfoToRequester(const char* requesterName, const void* gcPayload, int gcPayloadSize);
+#endif
 		// void	AuthToAdd(keyA account, keyA companion, bool bDeny);
 		bool	AuthToAdd(keyA account, keyA companion, bool bDeny);
 

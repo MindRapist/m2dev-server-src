@@ -20,6 +20,10 @@
 #include "skill.h"
 #include "threeway_war.h"
 
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+#include "crc32.h"
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Input Processor
@@ -258,6 +262,15 @@ void CInputP2P::Setup(LPDESC d, const char * c_pData)
 	d->SetP2P(d->GetHostName(), p->wPort, p->bChannel);
 }
 
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+void CInputP2P::MessengerRequestAdd(const char* c_pData)
+{
+	TPacketGGMessengerRequest* p = (TPacketGGMessengerRequest*)c_pData;
+	sys_log(0, "P2P: Messenger: Friend Request from %s to %s", p->account, p->target);
+	MessengerManager::Instance().P2PRequestToAdd_Stage2(p->account, p->target);
+}
+#endif
+
 void CInputP2P::MessengerAdd(const char * c_pData)
 {
 	TPacketGGMessenger * p = (TPacketGGMessenger *) c_pData;
@@ -452,6 +465,12 @@ int CInputP2P::Analyze(LPDESC d, BYTE bHeader, const char * c_pData)
 		case HEADER_GG_MESSENGER_ADD:
 			MessengerAdd(c_pData);
 			break;
+
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+		case HEADER_GG_MESSENGER_REQUEST_ADD:
+			MessengerRequestAdd(c_pData);
+			break;
+#endif
 
 		case HEADER_GG_MESSENGER_REMOVE:
 			MessengerRemove(c_pData);
