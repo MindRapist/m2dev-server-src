@@ -10,8 +10,6 @@
 [submodule "vendor/stb"]
 	path = vendor/stb
 	url = https://github.com/nothings/stb.git
-	sparse = true
 [submodule "vendor/pcg-cpp"]
 	path = vendor/pcg-cpp
 	url = https://github.com/imneme/pcg-cpp.git
-	sparse = true
