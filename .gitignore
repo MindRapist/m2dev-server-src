@@ -4,7 +4,7 @@
 /vendor/spdlog/*
 /vendor/mariadb-connector-c/*
 /vendor/cryptopp/src/*
-/vendor/spdlog/*
+/vendor/stb/*
 /vendor/pcg-cpp/*
 
 !/vendor/spdlog
