@@ -59,10 +59,23 @@ class MessengerManager : public singleton<MessengerManager>
 
 		void	Destroy();
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+		// Helpers to manage friend-request index so requests involving a disconnecting character can be removed
+		void	RegisterRequestComplex(DWORD dw1, DWORD dw2, DWORD dwComplex);
+		void	RemoveComplex(DWORD dwComplex);
+		void	EraseRequestsForAccount(keyA account);
+#endif
+
 		std::set<keyT>			m_set_loginAccount;
 		std::map<keyT, std::set<keyT> >	m_Relation;
 		std::map<keyT, std::set<keyT> >	m_InverseRelation;
 		std::set<DWORD>			m_set_requestToAdd;
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+		// Mapping from per-name-hash (dw1 or dw2) -> dwComplex entries.
+		// Allows efficient removal of all request entries that involve a given account hash.
+		std::multimap<DWORD, DWORD>	m_map_requestIndex;
+#endif
 };
 
 #endif

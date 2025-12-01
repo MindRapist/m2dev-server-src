@@ -103,6 +103,10 @@ void MessengerManager::Logout(MessengerManager::keyA account)
 	if (m_set_loginAccount.find(account) == m_set_loginAccount.end())
 		return;
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	EraseRequestsForAccount(account);
+#endif
+
 	m_set_loginAccount.erase(account);
 
 	std::set<MessengerManager::keyT>::iterator it;
@@ -124,22 +128,55 @@ void MessengerManager::Logout(MessengerManager::keyA account)
 	//m_map_stMobile.erase(account);
 }
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+void MessengerManager::RegisterRequestComplex(DWORD dw1, DWORD dw2, DWORD dwComplex)
+{
+	// Insert into main set (fast existence checks)
+	m_set_requestToAdd.insert(dwComplex);
+
+	// Index by both participant hashes so we can remove by account later.
+	m_map_requestIndex.insert(std::make_pair(dw1, dwComplex));
+	m_map_requestIndex.insert(std::make_pair(dw2, dwComplex));
+}
+
+void MessengerManager::RemoveComplex(DWORD dwComplex)
+{
+	// Remove from main set
+	m_set_requestToAdd.erase(dwComplex);
+
+	// Remove all index entries that reference this complex value.
+	for (auto it = m_map_requestIndex.begin(); it != m_map_requestIndex.end(); )
+	{
+		if (it->second == dwComplex)
+			it = m_map_requestIndex.erase(it);
+		else
+			++it;
+	}
+}
+
+void MessengerManager::EraseRequestsForAccount(MessengerManager::keyA account)
+{
+	// Compute the per-name hash used when requests were registered.
+	DWORD dwHash = GetCRC32(account.c_str(), account.length());
+
+	// Collect dwComplex values to remove (avoid modifying multimap while iterating its range)
+	std::vector<DWORD> toRemove;
+	auto range = m_map_requestIndex.equal_range(dwHash);
+	for (auto it = range.first; it != range.second; ++it)
+	{
+		toRemove.push_back(it->second);
+	}
+
+	// Remove each complex entry fully (from set and all index entries)
+	for (DWORD dwComplex : toRemove)
+		RemoveComplex(dwComplex);
+}
+#endif
+
 #ifdef CROSS_CHANNEL_FRIEND_REQUEST
 void MessengerManager::RegisterRequestToAdd(const char* name, const char* targetName)
 {
 	LPCHARACTER ch = CHARACTER_MANAGER::Instance().FindPC(name);
-	LPCHARACTER tch = CHARACTER_MANAGER::Instance().FindPC(targetName);
-
-	if (!tch || !tch->IsPC())
-	{
-		sys_log(0, "MessengerManager::RegisterRequestToAdd: DUMDUM: no character %s", targetName);
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("%s 님은 접속되 있지 않습니다."), targetName);
-		return;
-	}
-	else
-	{
-		sys_err("MessengerManager::RegisterRequestToAdd: DUMDUM: found character %s", tch->GetPlayerID());
-	}
 
 	uint32_t dw1 = GetCRC32(name, strlen(name));
 	uint32_t dw2 = GetCRC32(targetName, strlen(targetName));
@@ -159,7 +196,6 @@ void MessengerManager::RegisterRequestToAdd(const char* name, const char* target
 	if (IsInList(name, targetName) || IsInList(targetName, name))
 	{
 		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), targetName);
-		sys_log(0, "MessengerManager::RegisterRequestToAdd: DUMDUM: already friends %s <-> %s", name, targetName);
 		return;
 	}
 
@@ -167,7 +203,6 @@ void MessengerManager::RegisterRequestToAdd(const char* name, const char* target
 	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
 	{
 		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You already sent a friend request to %s."), targetName);
-		sys_log(0, "MessengerManager::RegisterRequestToAdd: DUMDUM: already requested %s -> %s", name, targetName);
 		return;
 	}
 
@@ -175,11 +210,14 @@ void MessengerManager::RegisterRequestToAdd(const char* name, const char* target
 	if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
 	{
 		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), targetName);
-		sys_log(0, "MessengerManager::RegisterRequestToAdd: DUMDUM: target already requested %s -> %s", targetName, name);
 		return;
 	}
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	RegisterRequestComplex(dw1, dw2, dwComplex);
+#else
 	m_set_requestToAdd.insert(dwComplex);
+#endif
 }
 
 // stage 1: starts on the core where "ch" resides. Validate ch and move to stage 2
@@ -275,9 +313,11 @@ void MessengerManager::RequestToAdd(LPCHARACTER ch, LPCHARACTER target)
 
 		return;
 	}
-#endif
 
+	RegisterRequestComplex(dw1, dw2, dwComplex);
+#else
 	m_set_requestToAdd.insert(dwComplex);
+#endif
 
 	target->ChatPacket(CHAT_TYPE_COMMAND, "messenger_auth %s", ch->GetName());
 }
@@ -321,7 +361,11 @@ bool MessengerManager::AuthToAdd(MessengerManager::keyA account, MessengerManage
 		return false;
 	}
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	RemoveComplex(dwComplex);
+#else
 	m_set_requestToAdd.erase(dwComplex);
+#endif
 
 #ifdef FIX_MESSENGER_ACTION_SYNC
 	// In-memory quick check (fast, works if lists are loaded)

@@ -1,1 +1,5 @@
 ﻿/build/
+/includes/
+vendor/**
+!/vendor/CMakeLists.txt
+!/vendor/cryptopp/CMakeLists.txt

@@ -1,19 +1,4 @@
-﻿file(GLOB_RECURSE ALL_SOURCES
-     "${CMAKE_SOURCE_DIR}/src/*.h"
-     "${CMAKE_SOURCE_DIR}/src/*.c"
-     "${CMAKE_SOURCE_DIR}/src/*.cpp")
-
-if (NOT WIN32 AND USE_SIL)
-  set(GAME_SOURCES "")
-
-  foreach(_f ${ALL_SOURCES})
-    if(NOT _f MATCHES ".*/vendor/cryptopp/.*" AND NOT _f MATCHES ".*/vendor/.*")
-      list(APPEND GAME_SOURCES "${_f}")
-    endif()
-  endforeach()
-else()
-  set(GAME_SOURCES ${ALL_SOURCES})
-endif()
+﻿file(GLOB_RECURSE GAME_SOURCES "*.h" "*.c" "*.cpp")
 
 add_executable(game ${GAME_SOURCES})
 

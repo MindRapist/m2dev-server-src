@@ -137,50 +137,76 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
 	message(STATUS "All core submodules are initialized.")
 
 	# --- 2. Sparse Checkout: STB Headers ---
-	# Repo: https://github.com/nothings/stb (Files needed: stb_image.h, stb_image_write.h)
-	set(STB_MODULE_NAME vendor/stb)
-	set(STB_SUBMODULE_PATH "${CMAKE_SOURCE_DIR}/.git/modules/${STB_MODULE_NAME}")
+	# ====================================================================
 
-	# NOTE: Assume you ran 'git submodule add https://github.com/nothings/stb.git vendor/stb' ONCE.
-	if (NOT EXISTS "${STB_SUBMODULE_PATH}/info/sparse-checkout")
-		message(STATUS "Configuring sparse checkout for STB headers...")
+	# CRITICAL: Ensure the includes directory exists before we try to copy files into it.
+	file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/includes")
 
-		# 2a. Create the sparse-checkout file with the required files (in the .git directory)
+	# --- 1. STB: Clone, Copy, and Cleanup ---
+	set(STB_DEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/includes/stb_image.h")
+	set(STB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/stb")
+
+	# Check if the file is missing in the final destination
+	if (NOT EXISTS ${STB_DEST_FILE})
+		message(STATUS "STB headers missing in includes/. Cloning, copying, and cleaning up...")
+
+		# A. Clone (Updates/clones the full submodule into vendor/stb)
 		execute_process(
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${STB_SUBMODULE_PATH}/info"
-			COMMAND ${CMAKE_COMMAND} -E echo "stb_image.h\nstb_image_write.h" > "${STB_SUBMODULE_PATH}/info/sparse-checkout"
-			OUTPUT_VARIABLE DUMMY_OUTPUT # Suppress CMake 3.15 warning about command output
-		)
-
-		# 2b. Apply the sparse filter by running update again
-		execute_process(
-			COMMAND git submodule update ${STB_MODULE_NAME}
+			COMMAND git submodule update --init vendor/stb
 			WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+			RESULT_VARIABLE RESULT
 		)
+		if (RESULT)
+			message(FATAL_ERROR "Failed to clone STB submodule.")
+		endif()
+
+		# B. Copy (Moves the files from the temporary submodule to the includes folder)
+		file(COPY
+			"${STB_SOURCE_DIR}/stb_image.h"
+			"${STB_SOURCE_DIR}/stb_image_write.h"
+			DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+		)
+
+		# C. Delete (Cleanup the entire submodule directory, including Git history)
+		file(REMOVE_RECURSE ${STB_SOURCE_DIR})
+
+		message(STATUS "STB headers copied and submodule cleaned up.")
 	endif()
 
-	# --- 3. Sparse Checkout: PCG-CPP Headers ---
-	# Repo: https://github.com/imneme/pcg-cpp (Files needed: include/pcg_*.hpp)
-	set(PCG_MODULE_NAME vendor/pcg-cpp)
-	set(PCG_SUBMODULE_PATH "${CMAKE_SOURCE_DIR}/.git/modules/${PCG_MODULE_NAME}")
+	# --- 2. PCG-CPP: Clone, Copy, and Cleanup ---
+	set(PCG_DEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/includes/pcg_random.hpp")
+	set(PCG_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/pcg-cpp")
 
-	# NOTE: Assume you ran 'git submodule add https://github.com/imneme/pcg-cpp.git vendor/pcg-cpp' ONCE.
-	if (NOT EXISTS "${PCG_SUBMODULE_PATH}/info/sparse-checkout")
-		message(STATUS "Configuring sparse checkout for PCG-CPP headers...")
+	# Check if the file is missing in the final destination
+	if (NOT EXISTS ${PCG_DEST_FILE})
+		message(STATUS "PCG-CPP headers missing in includes/. Cloning, copying, and cleaning up...")
 
-		# Create the sparse-checkout file. We list the 'include/' directory.
+		# A. Clone
 		execute_process(
-			COMMAND ${CMAKE_COMMAND} -E make_directory "${PCG_SUBMODULE_PATH}/info"
-			COMMAND ${CMAKE_COMMAND} -E echo "include/" > "${PCG_SUBMODULE_PATH}/info/sparse-checkout"
-			OUTPUT_VARIABLE DUMMY_OUTPUT # Suppress CMake 3.15 warning
-		)
-		
-		# Apply the sparse filter by running update again
-		execute_process(
-			COMMAND git submodule update ${PCG_MODULE_NAME}
+			COMMAND git submodule update --init vendor/pcg-cpp
 			WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+			RESULT_VARIABLE RESULT
 		)
+		if (RESULT)
+			message(FATAL_ERROR "Failed to clone PCG-CPP submodule.")
+		endif()
+
+		# B. Copy (Note the files are nested in the submodule's 'include' folder)
+		file(COPY
+			"${PCG_SOURCE_DIR}/include/pcg_extras.hpp"
+			"${PCG_SOURCE_DIR}/include/pcg_random.hpp"
+			"${PCG_SOURCE_DIR}/include/pcg_uint128.hpp"
+			DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+		)
+
+		# C. Delete
+		file(REMOVE_RECURSE ${PCG_SOURCE_DIR})
+
+		message(STATUS "PCG-CPP headers copied and submodule cleaned up.")
 	endif()
+	# ====================================================================
+	# [END] Submodule Init and Cleanup
+	# ====================================================================
 
 endif()
 # ====================================================================
