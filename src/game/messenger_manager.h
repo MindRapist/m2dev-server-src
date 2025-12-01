@@ -3,6 +3,10 @@
 
 #include "db.h"
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+#include "db/Lock.h"
+#endif
+
 class MessengerManager : public singleton<MessengerManager>
 {
 	public:
@@ -75,6 +79,7 @@ class MessengerManager : public singleton<MessengerManager>
 		// Mapping from per-name-hash (dw1 or dw2) -> dwComplex entries.
 		// Allows efficient removal of all request entries that involve a given account hash.
 		std::multimap<DWORD, DWORD>	m_map_requestIndex;
+		CLock					m_requestLock;
 #endif
 };
 

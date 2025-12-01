@@ -140,15 +140,15 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
 	# ====================================================================
 
 	# CRITICAL: Ensure the includes directory exists before we try to copy files into it.
-	file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/includes")
+	file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 	# --- 1. STB: Clone, Copy, and Cleanup ---
-	set(STB_DEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/includes/stb_image.h")
+	set(STB_DEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/include/stb_image.h")
 	set(STB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/stb")
 
 	# Check if the file is missing in the final destination
 	if (NOT EXISTS ${STB_DEST_FILE})
-		message(STATUS "STB headers missing in includes/. Cloning, copying, and cleaning up...")
+		message(STATUS "STB headers missing in include/. Cloning, copying, and cleaning up...")
 
 		# A. Clone (Updates/clones the full submodule into vendor/stb)
 		execute_process(
@@ -164,7 +164,7 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
 		file(COPY
 			"${STB_SOURCE_DIR}/stb_image.h"
 			"${STB_SOURCE_DIR}/stb_image_write.h"
-			DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+			DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/include"
 		)
 
 		# C. Delete (Cleanup the entire submodule directory, including Git history)
@@ -174,12 +174,12 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
 	endif()
 
 	# --- 2. PCG-CPP: Clone, Copy, and Cleanup ---
-	set(PCG_DEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/includes/pcg_random.hpp")
+	set(PCG_DEST_FILE "${CMAKE_CURRENT_SOURCE_DIR}/include/pcg_random.hpp")
 	set(PCG_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/pcg-cpp")
 
 	# Check if the file is missing in the final destination
 	if (NOT EXISTS ${PCG_DEST_FILE})
-		message(STATUS "PCG-CPP headers missing in includes/. Cloning, copying, and cleaning up...")
+		message(STATUS "PCG-CPP headers missing in include/. Cloning, copying, and cleaning up...")
 
 		# A. Clone
 		execute_process(
@@ -196,7 +196,7 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/.git")
 			"${PCG_SOURCE_DIR}/include/pcg_extras.hpp"
 			"${PCG_SOURCE_DIR}/include/pcg_random.hpp"
 			"${PCG_SOURCE_DIR}/include/pcg_uint128.hpp"
-			DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+			DESTINATION "${CMAKE_CURRENT_SOURCE_DIR}/include"
 		)
 
 		# C. Delete

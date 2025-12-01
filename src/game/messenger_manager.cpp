@@ -13,16 +13,38 @@
 #include "questmanager.h"
 
 #ifdef FIX_MESSENGER_ACTION_SYNC
+#include "db/Lock.h"
+#endif
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
 static char __account[CHARACTER_NAME_MAX_LEN * 2 + 1];
 static char __companion[CHARACTER_NAME_MAX_LEN * 2 + 1];
+
+#if !defined(__GNUC__)
+// nothing
+#endif
+
+// Small RAII wrapper for the project's CLock
+struct CScopedLock
+{
+	CLock & lock;
+	CScopedLock(CLock & l) : lock(l) { lock.Lock(); }
+	 ~CScopedLock() { lock.Unlock(); }
+};
 #endif
 
 MessengerManager::MessengerManager()
 {
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	m_requestLock.Initialize();
+#endif
 }
 
 MessengerManager::~MessengerManager()
 {
+#ifdef FIX_MESSENGER_ACTION_SYNC
+	m_requestLock.Destroy();
+#endif
 }
 
 void MessengerManager::Initialize()
@@ -132,7 +154,7 @@ void MessengerManager::Logout(MessengerManager::keyA account)
 void MessengerManager::RegisterRequestComplex(DWORD dw1, DWORD dw2, DWORD dwComplex)
 {
 	// Insert into main set (fast existence checks)
-	m_set_requestToAdd.insert(dwComplex);
+	CScopedLock lk(m_requestLock);
 
 	// Index by both participant hashes so we can remove by account later.
 	m_map_requestIndex.insert(std::make_pair(dw1, dwComplex));
@@ -141,6 +163,8 @@ void MessengerManager::RegisterRequestComplex(DWORD dw1, DWORD dw2, DWORD dwComp
 
 void MessengerManager::RemoveComplex(DWORD dwComplex)
 {
+	CScopedLock lk(m_requestLock);
+
 	// Remove from main set
 	m_set_requestToAdd.erase(dwComplex);
 
@@ -161,10 +185,13 @@ void MessengerManager::EraseRequestsForAccount(MessengerManager::keyA account)
 
 	// Collect dwComplex values to remove (avoid modifying multimap while iterating its range)
 	std::vector<DWORD> toRemove;
-	auto range = m_map_requestIndex.equal_range(dwHash);
-	for (auto it = range.first; it != range.second; ++it)
 	{
-		toRemove.push_back(it->second);
+		CScopedLock lk(m_requestLock);
+
+		auto range = m_map_requestIndex.equal_range(dwHash);
+
+		for (auto it = range.first; it != range.second; ++it)
+			toRemove.push_back(it->second);
 	}
 
 	// Remove each complex entry fully (from set and all index entries)
@@ -195,29 +222,41 @@ void MessengerManager::RegisterRequestToAdd(const char* name, const char* target
 	// In-memory quick check (fast, works if lists are loaded)
 	if (IsInList(name, targetName) || IsInList(targetName, name))
 	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), targetName);
+		if (ch)
+			ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), targetName);
+
 		return;
 	}
 
-	// Check if this requester already sent the same request
-	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
 	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You already sent a friend request to %s."), targetName);
-		return;
-	}
+		CScopedLock lk(m_requestLock);
 
-	// Check if target already sent a request to requester (reverse)
-	if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
-	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), targetName);
-		return;
-	}
+		// Check if this requester already sent the same request
+		if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
+		{
+			if (ch)
+				ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You already sent a friend request to %s."), targetName);
+
+			return;
+		}
+
+		// Check if target already sent a request to requester (reverse)
+		if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
+		{
+			if (ch)
+				ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), targetName);
+
+			return;
+		}
 
 #ifdef FIX_MESSENGER_ACTION_SYNC
-	RegisterRequestComplex(dw1, dw2, dwComplex);
+		m_set_requestToAdd.insert(dwComplex);
+		m_map_requestIndex.insert(std::make_pair(dw1, dwComplex));
+		m_map_requestIndex.insert(std::make_pair(dw2, dwComplex));
 #else
-	m_set_requestToAdd.insert(dwComplex);
+		m_set_requestToAdd.insert(dwComplex);
 #endif
+	}
 }
 
 // stage 1: starts on the core where "ch" resides. Validate ch and move to stage 2
@@ -299,22 +338,28 @@ void MessengerManager::RequestToAdd(LPCHARACTER ch, LPCHARACTER target)
 		return;
 	}
 
-	// Check if this requester already sent the same request
-	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
 	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You already sent a friend request to %s."), companion.c_str());
-		return;
+		CScopedLock lk(m_requestLock);
+
+		// Check if this requester already sent the same request
+		if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
+		{
+			ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You already sent a friend request to %s."), companion.c_str());
+			return;
+		}
+
+		// Check if target already sent a request to requester (reverse)
+		if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
+		{
+			ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), companion.c_str());
+
+			return;
+		}
+
+		m_set_requestToAdd.insert(dwComplex);
+		m_map_requestIndex.insert(std::make_pair(dw1, dwComplex));
+		m_map_requestIndex.insert(std::make_pair(dw2, dwComplex));
 	}
-
-	// Check if target already sent a request to requester (reverse)
-	if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
-	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), companion.c_str());
-
-		return;
-	}
-
-	RegisterRequestComplex(dw1, dw2, dwComplex);
 #else
 	m_set_requestToAdd.insert(dwComplex);
 #endif
@@ -355,19 +400,29 @@ bool MessengerManager::AuthToAdd(MessengerManager::keyA account, MessengerManage
 	snprintf(buf, sizeof(buf), "%u:%u", dw1, dw2);
 	DWORD dwComplex = GetCRC32(buf, strlen(buf));
 
-	if (m_set_requestToAdd.find(dwComplex) == m_set_requestToAdd.end())
+#ifdef FIX_MESSENGER_ACTION_SYNC
 	{
-		sys_log(0, "MessengerManager::AuthToAdd : request not exist %s -> %s", companion.c_str(), account.c_str());
-		return false;
+		CScopedLock lk(m_requestLock);
+
+#endif
+		if (m_set_requestToAdd.find(dwComplex) == m_set_requestToAdd.end())
+		{
+			sys_log(0, "MessengerManager::AuthToAdd : request not exist %s -> %s", companion.c_str(), account.c_str());
+			return false;
+		}
+
+		m_set_requestToAdd.erase(dwComplex);
+
+#ifdef FIX_MESSENGER_ACTION_SYNC
+		for (auto it = m_map_requestIndex.begin(); it != m_map_requestIndex.end(); )
+		{
+			if (it->second == dwComplex)
+				it = m_map_requestIndex.erase(it);
+			else
+				++it;
+		}
 	}
 
-#ifdef FIX_MESSENGER_ACTION_SYNC
-	RemoveComplex(dwComplex);
-#else
-	m_set_requestToAdd.erase(dwComplex);
-#endif
-
-#ifdef FIX_MESSENGER_ACTION_SYNC
 	// In-memory quick check (fast, works if lists are loaded)
 	if (IsInList(account, companion) || IsInList(companion, account))
 	{

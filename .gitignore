@@ -1,16 +1,5 @@
 ﻿/build/
 /includes/
-
-vendor/mariadb-connector-c/*
-vendor/spdlog/*
-vendor/stb/*
-vendor/pcg-cpp/*
-vendor/cryptopp/src/*
-
-!/vendor/mariadb-connector-c
-!/vendor/spdlog
-!/vendor/stb
-!/vendor/pcg-cpp
-!/vendor/cryptopp/src
+vendor/**
 !/vendor/CMakeLists.txt
 !/vendor/cryptopp/CMakeLists.txt
