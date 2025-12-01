@@ -79,11 +79,21 @@ def copy_headers_and_cleanup(dep):
 	
 	# 2. Copy files
 	source_dir = os.path.join(PROJECT_ROOT, dep['path'])
+
+	files_to_copy = []
+
 	for file_path_rel in dep['copy']:
-		# For cryptopp/src, the file_path_rel is "cryptopp/files.h", so we join it.
-		src = os.path.join(source_dir, file_path_rel)
+		# PCG-CPP headers are nested under its 'include' folder, unlike STB/others.
+		if dep['name'] == 'pcg-cpp':
+			files_to_copy.append(os.path.join("include", file_path_rel))
+		else:
+			files_to_copy.append(file_path_rel)
+
+	for file_path_rel_mod in files_to_copy:
+		# For cryptopp/src, the file_path_rel_mod is "cryptopp/files.h", so we join it.
+		src = os.path.join(source_dir, file_path_rel_mod)
 		# The destination is just the filename for simplicity
-		dst_filename = file_path_rel.split('/')[-1] 
+		dst_filename = file_path_rel_mod.split('/')[-1] 
 		dst = os.path.join(INCLUDE_DIR, dst_filename)
 		
 		try:
