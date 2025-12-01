@@ -988,6 +988,20 @@ int CInputMain::Messenger(LPCHARACTER ch, const char* c_pData, size_t uiBytes)
 				if (!tch)
 				{
 #ifdef CROSS_CHANNEL_FRIEND_REQUEST
+					const CCI* pkCCI = P2P_MANAGER::instance().Find(name);
+
+					if (!pkCCI)
+					{
+						ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("%s 님은 접속되 있지 않습니다."), name);
+						return CHARACTER_NAME_MAX_LEN;
+					}
+
+					if (MessengerManager::instance().IsInList(ch->GetName(), name) || MessengerManager::instance().IsInList(name, ch->GetName()))
+					{
+						ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), name);
+						return;
+					}
+
 					MessengerManager::instance().P2PRequestToAdd_Stage1(ch, name);
 #else
 					ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("%s 님은 접속되 있지 않습니다."), name);
