@@ -9,7 +9,7 @@ import shutil
 # All paths are relative to the project root.
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-include_DIR = os.path.join(PROJECT_ROOT, "include")
+INCLUDE_DIR = os.path.join(PROJECT_ROOT, "include")
 
 # Define all dependencies, their Git URLs, and which files need copying.
 DEPS_INFO = [
@@ -66,7 +66,7 @@ def copy_headers_and_cleanup(dep):
 
 	# Check if a target header file already exists as a proxy for the entire set
 	first_header_name = dep['copy'][0].split('/')[-1]
-	target_path = os.path.join(include_DIR, first_header_name)
+	target_path = os.path.join(INCLUDE_DIR, first_header_name)
 
 	if os.path.exists(target_path):
 		print(f" ⚠️ Headers for {dep['name']} already exist in include/.")
