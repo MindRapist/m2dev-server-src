@@ -1,0 +1,17 @@
+[submodule "vendor/spdlog"]
+	path = vendor/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "vendor/mariadb-connector-c"]
+	path = vendor/mariadb-connector-c
+	url = https://github.com/mariadb-corporation/mariadb-connector-c.git
+[submodule "vendor/cryptopp/src"]
+	path = vendor/cryptopp/src
+	url = https://github.com/weidai11/cryptopp.git
+[submodule "vendor/stb"]
+	path = vendor/stb
+	url = https://github.com/nothings/stb.git
+	sparse = true
+[submodule "vendor/pcg-cpp"]
+	path = vendor/pcg-cpp
+	url = https://github.com/imneme/pcg-cpp.git
+	sparse = true

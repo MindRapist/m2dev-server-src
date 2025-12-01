@@ -2022,7 +2022,7 @@ bool CHARACTER::UseItemEx(LPITEM item, TItemPos DestCell)
 				{
 					if (GetLevel() < 15)
 					{
-						ChatPacket(CHAT_TYPE_INFO, "15레벨 이하에서는 사용할 수 없습니다.");
+						ChatPacket(CHAT_TYPE_INFO, LC_TEXT("15레벨 이하에서는 사용할 수 없습니다."));
 						return false;
 					}
 				}
@@ -5262,9 +5262,11 @@ bool CHARACTER::UseItem(TItemPos Cell, TItemPos DestCell)
 
 			if (nDistant > nDist)
 			{
-				ChatPacket(CHAT_TYPE_INFO, LC_TEXT("이동 되어질 위치와 너무 가까워 귀환부를 사용할수 없습니다."));				
+				ChatPacket(CHAT_TYPE_INFO, LC_TEXT("이동 되어질 위치와 너무 가까워 귀환부를 사용할수 없습니다."));
+
 				if (test_server)
-					ChatPacket(CHAT_TYPE_INFO, "PossibleDistant %f nNowDist %f", nDistant,nDist); 
+					ChatPacket(CHAT_TYPE_INFO, "PossibleDistant %f nNowDist %f", nDistant,nDist);
+
 				return false;
 			}
 		}
@@ -6114,7 +6116,7 @@ bool CHARACTER::EquipItem(LPITEM item, int iCandidateCell)
 		// 용혼석은 swap을 지원하면 안됨.
 		if(GetInventoryItem(INVENTORY_MAX_NUM + iWearCell))
 		{
-			ChatPacket(CHAT_TYPE_INFO, "이미 같은 종류의 용혼석을 착용하고 있습니다.");
+			ChatPacket(CHAT_TYPE_INFO, LC_TEXT("이미 같은 종류의 용혼석을 착용하고 있습니다."));
 			return false;
 		}
 		

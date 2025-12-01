@@ -187,7 +187,12 @@ void CHARACTER::SetSkillLevel(DWORD dwVnum, BYTE bLev)
 	else if (bLev >= 20)
 		m_pSkillLevels[dwVnum].bMasterType = SKILL_MASTER;
 	else
+	{
+		if (bLev == 0)
+			ResetOneSkillCoolTime(dwVnum);
+
 		m_pSkillLevels[dwVnum].bMasterType = SKILL_NORMAL;
+	}
 }
 
 bool CHARACTER::IsLearnableSkill(DWORD dwSkillVnum) const
@@ -432,7 +437,11 @@ bool CHARACTER::LearnSkillByBook(DWORD dwSkillVnum, BYTE bProb)
 	{
 		need_exp = 20000;
 
-		if ( GetExp() < need_exp )
+#ifdef FIX_BOOK_READING_FOR_MAX_LEVEL
+		if (GetExp() < need_exp && GetLevel() < gPlayerMaxLevel)
+#else
+		if (GetExp() < need_exp)
+#endif
 		{
 			ChatPacket(CHAT_TYPE_INFO, LC_TEXT("경험치가 부족하여 책을 읽을 수 없습니다."));
 			return false;
@@ -886,11 +895,24 @@ void CHARACTER::ResetSkill()
 	{
 		const std::pair<DWORD, TPlayerSkill>& pair = *(iter++);
 		m_pSkillLevels[pair.first] = pair.second;
+
+#ifdef FIX_REFRESH_SKILL_COOLDOWN
+		ResetSkillCoolTimes();
+#endif
 	}
 
 	ComputePoints();
 	SkillLevelPacket();
 }
+
+
+#ifdef FIX_REFRESH_SKILL_COOLDOWN
+void CHARACTER::ResetSkillCoolTimes()
+{
+	for (std::map<int, TSkillUseInfo>::iterator it = m_SkillUseInfo.begin(); it != m_SkillUseInfo.end(); ++it)
+		ResetOneSkillCoolTime(it->first);
+}
+#endif
 
 void CHARACTER::ComputePassiveSkill(DWORD dwVnum)
 {
@@ -3459,6 +3481,10 @@ bool CHARACTER::ResetOneSkill(DWORD dwVnum)
 	m_pSkillLevels[dwVnum].bMasterType = 0;
 	m_pSkillLevels[dwVnum].tNextRead = 0;
 
+#ifdef FIX_REFRESH_SKILL_COOLDOWN
+	ResetOneSkillCoolTime(dwVnum);
+#endif
+
 	if (level > 17)
 		level = 17;
 
@@ -3471,6 +3497,36 @@ bool CHARACTER::ResetOneSkill(DWORD dwVnum)
 
 	return true;
 }
+
+#ifdef FIX_REFRESH_SKILL_COOLDOWN
+void CHARACTER::ResetOneSkillCoolTime(DWORD dwVnum)
+{
+	if (dwVnum >= SKILL_MAX_NUM)
+		return;
+
+	if (!GetSkillGroup() || m_SkillUseInfo.empty())
+	{
+		// still try to disable toggle state even when no cooldown info exists
+		CSkillProto* pkSkNoInfo = CSkillManager::instance().Get(dwVnum);
+
+		if (pkSkNoInfo && IS_SET(pkSkNoInfo->dwFlag, SKILL_FLAG_TOGGLE))
+			RemoveAffect(pkSkNoInfo->dwVnum);
+
+		return;
+	}
+
+	std::map<int, TSkillUseInfo>::iterator it = m_SkillUseInfo.find(dwVnum);
+
+	if (it != m_SkillUseInfo.end())
+		it->second.dwNextSkillUsableTime = 0;
+
+	// If the skill is togglable, ensure it is turned off.
+	CSkillProto* pkSk = CSkillManager::instance().Get(dwVnum);
+
+	if (pkSk && IS_SET(pkSk->dwFlag, SKILL_FLAG_TOGGLE))
+		RemoveAffect(pkSk->dwVnum);
+}
+#endif
 
 bool CHARACTER::CanUseSkill(DWORD dwSkillVnum) const
 {

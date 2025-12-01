@@ -20,14 +20,29 @@ class MessengerManager : public singleton<MessengerManager>
 		void	Logout(keyA account);
 
 		void	RequestToAdd(LPCHARACTER ch, LPCHARACTER target);
+
+#ifdef CROSS_CHANNEL_FRIEND_REQUEST
+		void	RegisterRequestToAdd(const char* szAccount, const char* szTarget);
+		void	P2PRequestToAdd_Stage1(LPCHARACTER ch, const char* targetName);
+		void	P2PRequestToAdd_Stage2(const char* characterName, LPCHARACTER target);
+#endif
+
 		// void	AuthToAdd(keyA account, keyA companion, bool bDeny);
 		bool	AuthToAdd(keyA account, keyA companion, bool bDeny);
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+		void	__AddToList(keyA account, keyA companion, bool isRequester = true);	// 실제 m_Relation, m_InverseRelation 수정하는 메소드
+#else
 		void	__AddToList(keyA account, keyA companion);	// 실제 m_Relation, m_InverseRelation 수정하는 메소드
+#endif
 		void	AddToList(keyA account, keyA companion);
 
+#ifdef FIX_MESSENGER_ACTION_SYNC
+		void	__RemoveFromList(keyA account, keyA companion, bool isRequester = true); // 실제 m_Relation, m_InverseRelation 수정하는 메소드
+#else
 		void	__RemoveFromList(keyA account, keyA companion); // 실제 m_Relation, m_InverseRelation 수정하는 메소드
-		void	RemoveFromList(keyA account, keyA companion);	
+#endif
+		void	RemoveFromList(keyA account, keyA companion);
 
 		void	RemoveAllList(keyA account);
 
