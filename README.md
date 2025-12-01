@@ -23,7 +23,7 @@ git clone <repo>
 cd <repo>
 ```
 
-### 📦 Manual Dependency Management (For Updates or Rollbacks)
+### 📦 Manual Dependency Management (For Updates or Rollbacks) -- MUST BE RAN AT LEAST ONCE BEFORE BUILDING!
 To manually install all dependencies (and copy external headers) for the first time, you just need to run the Git initialization command. While the cmake command will run the specific checks, this command is the general way to ensure everything is set up:
 
 ```
@@ -57,6 +57,7 @@ mkdir -p build && cmake -B build
 
 ## ⚙️ How to Build
 After the initial clone, the project can be built with the standard CMake two-step process.
+Please make sure that you have ran ```git submodule update --init --recursive``` at least once before running the following commands.
 
 ```
 # 1. Create a build directory
