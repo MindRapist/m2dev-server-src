@@ -999,7 +999,7 @@ int CInputMain::Messenger(LPCHARACTER ch, const char* c_pData, size_t uiBytes)
 					if (MessengerManager::instance().IsInList(ch->GetName(), name) || MessengerManager::instance().IsInList(name, ch->GetName()))
 					{
 						ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), name);
-						return;
+						return CHARACTER_NAME_MAX_LEN;
 					}
 
 					MessengerManager::instance().P2PRequestToAdd_Stage1(ch, name);
