@@ -17,6 +17,24 @@ target_link_libraries(game
 	cryptopp-static
 )
 
+<<<<<<< Updated upstream
+=======
+if (USE_SIL AND NOT WIN32)
+	target_link_libraries(game
+		${MARIADB_LIB}
+		#${CRYPTOPP_LIB}
+		${SSL_LIB}
+		${CRYPTO_LIB}
+		${ZLIB_LIB}
+	)
+else()
+	target_link_libraries(game
+		mariadbclient
+		#cryptopp-static
+	)
+endif()
+
+>>>>>>> Stashed changes
 if (WIN32)
 	target_link_libraries(game ws2_32)
 else()

@@ -1,4 +1,4 @@
-
+﻿
 #include "stdafx.h"
 
 #include "ClientManager.h"
@@ -893,7 +893,6 @@ void CClientManager::__QUERY_PLAYER_CREATE(CPeer *peer, DWORD dwHandle, TPlayerC
 			packet->player_table.ht, 
 			packet->player_table.job);
 
-	//tw1x1: Buffer overflow (14.11.2025 / 21:08 GMT)
 	static char text[8192 + 1];
 
 	CDBManager::instance().EscapeString(text, packet->player_table.skills, sizeof(packet->player_table.skills));
@@ -1186,7 +1185,7 @@ void CClientManager::QUERY_ADD_AFFECT(CPeer * peer, TPacketGDAddAffect * p)
 	   */
 	snprintf(queryStr, sizeof(queryStr),
 			"REPLACE INTO affect%s (dwPID, bType, bApplyOn, lApplyValue, dwFlag, lDuration, lSPCost) "
-			"VALUES(%u, %u, %u, %ld, %u, %ld, %ld)",
+			"VALUES(%u, %u, %u, %ld, %u, %ld, %d)",
 			GetTablePostfix(),
 			p->dwPID,
 			p->elem.dwType,
