@@ -1,1 +1,39 @@
-﻿/build/
+﻿# -------------------------------------------------------------------
+# 1. BUILD ARTIFACTS
+# -------------------------------------------------------------------
+/build/
+
+# -------------------------------------------------------------------
+# 2. TEMPORARY SOURCE CACHES (Used by depinit.py for extraction)
+# -------------------------------------------------------------------
+.tmp_*
+
+# -------------------------------------------------------------------
+# 3. AGGRESSIVE VENDOR AND INCLUDE IGNORE
+# Ignore everything in the vendor/latest and include/latest directory by default.
+# -------------------------------------------------------------------
+/vendor/latest/*
+/include/latest/*
+
+# -------------------------------------------------------------------
+# 4. ESSENTIAL RE-INCLUSIONS (Submodules & Custom Files)
+# These folders/files MUST be tracked by Git.
+#
+# NOTE: To re-include a file inside an aggressively ignored folder,
+# you must re-include ALL parent folders first.
+# -------------------------------------------------------------------
+
+# Re-include Submodule Folders (Git automatically handles the contents)
+!/vendor/latest/cryptopp/
+!/vendor/latest/mariadb-connector-c/
+!/vendor/latest/spdlog/
+!/include/latest
+
+# Re-include Custom CMake Files (The specific files you want tracked)
+!/vendor/latest/CMakeLists.txt
+!/vendor/latest/cryptopp/CMakeLists.txt
+
+# -------------------------------------------------------------------
+# 5. EXTERN/INCLUDE FILES (Extracted files must be tracked)
+# Since depinit.py copies these, they must NOT be ignored.
+# -------------------------------------------------------------------

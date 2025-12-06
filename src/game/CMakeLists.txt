@@ -13,12 +13,10 @@ target_link_libraries(game
 	liblua
 
 	# external
-	mariadbclient
+	#mariadbclient
 	cryptopp-static
 )
 
-<<<<<<< Updated upstream
-=======
 if (USE_SIL AND NOT WIN32)
 	target_link_libraries(game
 		${MARIADB_LIB}
@@ -34,7 +32,6 @@ else()
 	)
 endif()
 
->>>>>>> Stashed changes
 if (WIN32)
 	target_link_libraries(game ws2_32)
 else()
