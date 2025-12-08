@@ -118,7 +118,8 @@ if (USE_SIL AND NOT WIN32)
 		# You may need to add system dependencies (e.g., ZLIB, PTHREAD, etc.) here!
 	)
 	
-	if (NOT CRYPTOPP_LIB OR NOT MARIADB_LIB OR NOT SPDLOG_LIB OR 
+	#if (NOT CRYPTOPP_LIB OR NOT MARIADB_LIB OR NOT SPDLOG_LIB OR 
+	if (NOT MARIADB_LIB OR NOT SPDLOG_LIB OR 
 		NOT SSL_LIB OR NOT CRYPTO_LIB OR NOT ZLIB_LIB OR NOT FMT_LIB)
 		
 		message(STATUS "--- Mandatory Library Check FAILED ---")

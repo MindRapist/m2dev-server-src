@@ -144,7 +144,9 @@ bool CSpeedServerEmpireExp::LoadExpTable()
 	const char	*delim = " \t\r\n";
 
 	sys_log (0, "load");
-	if (0==file_name || 0==file_name[0])
+
+	// if (0 == file_name || 0 == file_name[0])
+	if (file_name[0] == '\0')
 		return false;
 
 	if ((fp = fopen(file_name, "r"))==0)

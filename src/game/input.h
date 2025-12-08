@@ -344,6 +344,7 @@ class CInputP2P : public CInputProcessor
 		void		IamAwake(LPDESC d, const char * c_pData);
 #ifdef CROSS_CHANNEL_FRIEND_REQUEST
 		void		MessengerRequestAdd(const char* c_pData);
+		void		MessengerResponse(const char* c_pData);
 #endif
 
 	protected:

@@ -103,7 +103,7 @@ void CGuildMarkManager::LoadMarkImages()
 	{
 		DWORD markID = it->second;
 
-		if (markID < MAX_IMAGE_COUNT * CGuildMarkImage::MARK_TOTAL_COUNT)
+		if (markID < (DWORD)MAX_IMAGE_COUNT * (DWORD)CGuildMarkImage::MARK_TOTAL_COUNT)
 			isMarkExists[markID / CGuildMarkImage::MARK_TOTAL_COUNT] = true;
 	}
 

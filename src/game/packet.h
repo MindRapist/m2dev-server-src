@@ -306,6 +306,7 @@ enum
 
 #ifdef CROSS_CHANNEL_FRIEND_REQUEST
 	HEADER_GG_MESSENGER_REQUEST_ADD = 23,
+	HEADER_GG_MESSENGER_RESPONSE    = 24,
 #endif
 
 	HEADER_GG_SIEGE					= 25,
@@ -454,6 +455,14 @@ typedef struct SPacketGGMessengerRequest
 	char	account[CHARACTER_NAME_MAX_LEN + 1];
 	char	target[CHARACTER_NAME_MAX_LEN + 1];
 } TPacketGGMessengerRequest;
+
+typedef struct SPacketGGMessengerResponse
+{
+    BYTE bHeader;
+    char szRequester[CHARACTER_NAME_MAX_LEN + 1];
+    char szTarget[CHARACTER_NAME_MAX_LEN + 1];
+    BYTE bResponseType; // 0=already_sent, 1=already_received_reverse, 2=quest_running, 3=blocking_requests
+} TPacketGGMessengerResponse;
 #endif
 
 typedef struct SPacketGGMessengerMobile
@@ -1514,9 +1523,6 @@ enum
 	MESSENGER_SUBHEADER_CG_ADD_BY_VID,
 	MESSENGER_SUBHEADER_CG_ADD_BY_NAME,
 	MESSENGER_SUBHEADER_CG_REMOVE,
-#ifdef FIX_MESSENGER_ACTION_SYNC
-	MESSENGER_SUBHEADER_CG_DISMISS_REQUEST,
-#endif
 	MESSENGER_SUBHEADER_CG_INVITE_ANSWER,
 };
 
@@ -1542,13 +1548,6 @@ typedef struct command_messenger_remove
 	char login[LOGIN_MAX_LEN+1];
 	//uint32_t account;
 } TPacketCGMessengerRemove;
-
-#ifdef FIX_MESSENGER_ACTION_SYNC
-typedef struct command_messenger_dismiss_request
-{
-	char login[LOGIN_MAX_LEN+1];
-} TPacketCGMessengerDismissRequest;
-#endif
 
 typedef struct command_safebox_checkout
 {

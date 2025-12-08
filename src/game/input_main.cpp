@@ -1004,6 +1004,7 @@ int CInputMain::Messenger(LPCHARACTER ch, const char* c_pData, size_t uiBytes)
 						return CHARACTER_NAME_MAX_LEN;
 					}
 
+					// P2P request
 					MessengerManager::instance().P2PRequestToAdd_Stage1(ch, name);
 #else
 					ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("%s 님은 접속되 있지 않습니다."), name);
@@ -1046,20 +1047,6 @@ int CInputMain::Messenger(LPCHARACTER ch, const char* c_pData, size_t uiBytes)
 #endif
 			}
 			return CHARACTER_NAME_MAX_LEN;
-
-#ifdef FIX_MESSENGER_ACTION_SYNC
-		case MESSENGER_SUBHEADER_CG_DISMISS_REQUEST:
-			{
-				if (uiBytes < LOGIN_MAX_LEN)
-					return -1;
-
-				char szName[LOGIN_MAX_LEN + 1];
-				strlcpy(szName, c_pData, sizeof(szName));
-
-				MessengerManager::instance().DismissFriendRequest(ch->GetName(), szName);
-			}
-			return LOGIN_MAX_LEN;
-#endif
 
 		default:
 			sys_err("CInputMain::Messenger : Unknown subheader %d : %s", p->subheader, ch->GetName());

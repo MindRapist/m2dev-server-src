@@ -152,7 +152,7 @@ enum EDragonSoulStepTypes
 
 enum EDSInventoryMaxNum
 {
-	DRAGON_SOUL_INVENTORY_MAX_NUM = static_cast<uint8_t>(DS_SLOT_MAX) * static_cast<uint8_t>(DRAGON_SOUL_GRADE_MAX) * DRAGON_SOUL_BOX_SIZE,
+	DRAGON_SOUL_INVENTORY_MAX_NUM = static_cast<int>(DS_SLOT_MAX) * static_cast<int>(DRAGON_SOUL_GRADE_MAX) * DRAGON_SOUL_BOX_SIZE,
 };
 
 enum EFishSubTypes

@@ -4,7 +4,6 @@
 #include <cstdlib>
 
 #include "FSM.h"
-#include "service.h"
 
 // Constructor
 CFSM::CFSM()
@@ -39,38 +38,8 @@ void CFSM::Update()
 		m_pCurrentState->ExecuteBeginState();
 	}
 
-#ifdef FIX_POS_SYNC
-	// Check New State
-	if (m_pNewConcurrentState)
-	{
-		// Execute End State
-		if (m_pConcurrentState)
-			m_pConcurrentState->ExecuteEndState();
-
-		// Set New State
-		m_pConcurrentState = m_pNewConcurrentState;
-		m_pNewConcurrentState = 0;
-
-		// Execute Begin State
-		m_pConcurrentState->ExecuteBeginState();
-	}
-
-	if (bStopConcurrent && m_pConcurrentState) {
-		// Execute End State
-		m_pConcurrentState->ExecuteEndState();
-		m_pConcurrentState = 0;
-		bStopConcurrent = false;
-	}
-#endif
-
 	// Execute State
 	m_pCurrentState->ExecuteState();
-
-#ifdef FIX_POS_SYNC
-	if (m_pConcurrentState) {
-		m_pConcurrentState->ExecuteState();
-	}
-#endif
 }
 
 //======================================================================================================

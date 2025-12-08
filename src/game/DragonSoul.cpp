@@ -1220,7 +1220,7 @@ void DSManager::RefreshDragonSoulState(LPCHARACTER ch)
 	if (NULL == ch)
 		return ;
 
-	for (int i = WEAR_MAX_NUM; i < WEAR_MAX_NUM + static_cast<int8_t>(DS_SLOT_MAX) * static_cast<int8_t>(DRAGON_SOUL_DECK_MAX_NUM); i++)
+	for (int i = WEAR_MAX_NUM; i < WEAR_MAX_NUM + (int)DS_SLOT_MAX * (int)DRAGON_SOUL_DECK_MAX_NUM; i++)
 	{
 		LPITEM pItem = ch->GetWear(i);
 

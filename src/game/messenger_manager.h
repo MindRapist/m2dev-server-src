@@ -51,10 +51,6 @@ class MessengerManager : public singleton<MessengerManager>
 
 		void	RemoveAllList(keyA account);
 
-#ifdef FIX_MESSENGER_ACTION_SYNC
-		void DismissFriendRequest(const char* c_szTarget, const char* c_szRequester);
-#endif
-
 		void	Initialize();
 		
 		bool	IsInList(MessengerManager::keyA account, MessengerManager::keyA companion);
@@ -73,6 +69,7 @@ class MessengerManager : public singleton<MessengerManager>
 		void	RegisterRequestComplex(DWORD dw1, DWORD dw2, DWORD dwComplex);
 		void	RemoveComplex(DWORD dwComplex);
 		void	EraseRequestsForAccount(keyA account);
+		void 	EraseIncomingRequestsForTarget(const char* targetName);
 #endif
 
 		std::set<keyT>			m_set_loginAccount;

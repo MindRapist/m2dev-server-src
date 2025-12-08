@@ -132,8 +132,6 @@ void MessengerManager::Logout(MessengerManager::keyA account)
 #ifdef CROSS_CHANNEL_FRIEND_REQUEST
 void MessengerManager::RegisterRequestToAdd(const char* name, const char* targetName)
 {
-	LPCHARACTER ch = CHARACTER_MANAGER::Instance().FindPC(name);
-
 	uint32_t dw1 = GetCRC32(name, strlen(name));
 	uint32_t dw2 = GetCRC32(targetName, strlen(targetName));
 
@@ -141,35 +139,24 @@ void MessengerManager::RegisterRequestToAdd(const char* name, const char* target
 	snprintf(buf, sizeof(buf), "%u:%u", dw1, dw2);
 	buf[63] = '\0';
 
-	char buf2[64]{ 0, };
-	snprintf(buf2, sizeof(buf2), "%u:%u", dw2, dw1);
-	buf2[63] = '\0';
-
 	uint32_t dwComplex = GetCRC32(buf, strlen(buf));
-	uint32_t dwComplexRev = GetCRC32(buf2, strlen(buf2));
 
-	// In-memory quick check (fast, works if lists are loaded)
-	if (IsInList(name, targetName) || IsInList(targetName, name))
-	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You are already friends with %s."), targetName);
-		return;
-	}
-
+#ifdef FIX_MESSENGER_ACTION_SYNC
 	// Check if this requester already sent the same request
 	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
 	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] You already sent a friend request to %s."), targetName);
-		return;
+		// Send P2P response back to requester's core
+        TPacketGGMessengerResponse p2pResp{};
+        p2pResp.bHeader = HEADER_GG_MESSENGER_RESPONSE;
+        strlcpy(p2pResp.szRequester, name, sizeof(p2pResp.szRequester));
+        strlcpy(p2pResp.szTarget, targetName, sizeof(p2pResp.szTarget));
+        p2pResp.bResponseType = 0; // already_sent
+        P2P_MANAGER::Instance().Send(&p2pResp, sizeof(TPacketGGMessengerResponse));
+        return;
 	}
 
-	// Check if target already sent a request to requester (reverse)
-	if (m_set_requestToAdd.find(dwComplexRev) != m_set_requestToAdd.end())
-	{
-		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), targetName);
-		return;
-	}
-
-#ifdef FIX_MESSENGER_ACTION_SYNC
+    // Clear any old incoming requests for this target before adding new one
+    EraseIncomingRequestsForTarget(targetName);
 	RegisterRequestComplex(dw1, dw2, dwComplex);
 #else
 	m_set_requestToAdd.insert(dwComplex);
@@ -180,6 +167,22 @@ void MessengerManager::RegisterRequestToAdd(const char* name, const char* target
 void MessengerManager::P2PRequestToAdd_Stage1(LPCHARACTER ch, const char* targetName)
 {
 	LPCHARACTER pkTarget = CHARACTER_MANAGER::Instance().FindPC(targetName);
+
+	uint32_t dw1 = GetCRC32(ch->GetName(), strlen(ch->GetName()));
+	uint32_t dw2 = GetCRC32(targetName, strlen(targetName));
+
+	char buf[64]{ 0, };
+	snprintf(buf, sizeof(buf), "%u:%u", dw2, dw1);
+	buf[63] = '\0';
+
+	uint32_t dwComplex = GetCRC32(buf, strlen(buf));
+
+	// Check if target already sent a request to requester (reverse)
+	if (m_set_requestToAdd.find(dwComplex) != m_set_requestToAdd.end())
+	{
+		ch->ChatPacket(CHAT_TYPE_INFO, LC_TEXT("[Friends] %s has already sent you a friend request."), targetName);
+		return;
+	}
 
 	if (!pkTarget)
 	{
@@ -205,14 +208,34 @@ void MessengerManager::P2PRequestToAdd_Stage1(LPCHARACTER ch, const char* target
 // stage 2: ends up on the core where the target resides
 void MessengerManager::P2PRequestToAdd_Stage2(const char* characterName, LPCHARACTER target)
 {
+	LPCHARACTER ch = CHARACTER_MANAGER::Instance().FindPC(characterName);
+	
 	if (!target || !target->IsPC())
 		return;
 
 	if (quest::CQuestManager::instance().GetPCForce(target->GetPlayerID())->IsRunning())
-		return;
+	{
+		// Send response back to requester's core
+        TPacketGGMessengerResponse p2pResp{};
+        p2pResp.bHeader = HEADER_GG_MESSENGER_RESPONSE;
+        strlcpy(p2pResp.szRequester, characterName, sizeof(p2pResp.szRequester));
+        strlcpy(p2pResp.szTarget, target->GetName(), sizeof(p2pResp.szTarget));
+        p2pResp.bResponseType = 2; // quest_running
+        P2P_MANAGER::Instance().Send(&p2pResp, sizeof(TPacketGGMessengerResponse));
+        return;
+	}
 
 	if (target->IsBlockMode(BLOCK_MESSENGER_INVITE))
-		return;// could return some response back to the player, but fuck it
+	{
+		// Send response back to requester's core
+        TPacketGGMessengerResponse p2pResp{};
+        p2pResp.bHeader = HEADER_GG_MESSENGER_RESPONSE;
+        strlcpy(p2pResp.szRequester, characterName, sizeof(p2pResp.szRequester));
+        strlcpy(p2pResp.szTarget, target->GetName(), sizeof(p2pResp.szTarget));
+        p2pResp.bResponseType = 3; // blocking_requests
+        P2P_MANAGER::Instance().Send(&p2pResp, sizeof(TPacketGGMessengerResponse));
+        return;
+	}
 
 	MessengerManager::Instance().RegisterRequestToAdd(characterName, target->GetName());
 	target->ChatPacket(CHAT_TYPE_COMMAND, "messenger_auth %s", characterName);
@@ -270,6 +293,8 @@ void MessengerManager::RequestToAdd(LPCHARACTER ch, LPCHARACTER target)
 		return;
 	}
 
+    // Clear any old incoming requests for this target before adding new one
+    EraseIncomingRequestsForTarget(target->GetName());
 	// register complex indexed mappings so we can erase them on disconnect
 	RegisterRequestComplex(dw1, dw2, dwComplex);
 #else
@@ -430,6 +455,30 @@ void MessengerManager::EraseRequestsForAccount(keyA account)
 
 	for (DWORD c : toRemove)
 		RemoveComplex(c);
+}
+
+
+void MessengerManager::EraseIncomingRequestsForTarget(const char* targetName)
+{
+    DWORD dwTarget = GetCRC32(targetName, strlen(targetName));
+
+    std::vector<DWORD> toRemove;
+
+    // Find all requests where this person is the target (incoming requests)
+    auto itTo = m_map_requestsTo.find(dwTarget);
+    
+    if (itTo != m_map_requestsTo.end())
+    {
+        for (DWORD c : itTo->second)
+            toRemove.push_back(c);
+    }
+
+    if (toRemove.empty())
+        return;
+
+    // Remove all found requests
+    for (DWORD c : toRemove)
+        RemoveComplex(c);
 }
 
 void MessengerManager::__AddToList(MessengerManager::keyA account, MessengerManager::keyA companion, bool isRequester)
@@ -631,28 +680,6 @@ void MessengerManager::RemoveAllList(keyA account)
 
 	company.clear();
 }
-
-#ifdef FIX_MESSENGER_ACTION_SYNC
-void MessengerManager::DismissFriendRequest(const char* c_szTarget, const char* c_szRequester)
-{
-    if (!c_szTarget || !c_szRequester)
-        return;
-
-    // Build the same complex key used in RequestToAdd (requester first, target second)
-    DWORD dwReq = GetCRC32(c_szRequester, strlen(c_szRequester));
-    DWORD dwTgt = GetCRC32(c_szTarget, strlen(c_szTarget));
-
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%u:%u", dwReq, dwTgt);
-    DWORD dwComplex = GetCRC32(buf, strlen(buf));
-
-    if (m_set_requestToAdd.find(dwComplex) == m_set_requestToAdd.end())
-        return;
-
-    RemoveComplex(dwComplex);
-    sys_log(0, "MESSENGER: %s dismissed friend request from %s", c_szTarget, c_szRequester);
-}
-#endif
 
 void MessengerManager::SendList(MessengerManager::keyA account)
 {

@@ -16,7 +16,7 @@ The single most important step before building is running the depinit.py script.
 
 #### 1. Clone the repository
 ```
-git clone --recursive --branch exp_1/src-improvs-and-submodules --single-branch https://github.com/MindRapist/m2dev-server-src.git
+git clone --recursive --branch <branch_name> --single-branch https://github.com/MindRapist/m2dev-server-src.git
 cd m2dev-server-src
 ```
 #### 2. Run the Dependency Initialization script (⚠️⚠️⚠️ MUST be done at least once before first build!!! ⚠️⚠️⚠️)

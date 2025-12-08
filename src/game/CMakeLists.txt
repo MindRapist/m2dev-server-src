@@ -28,7 +28,7 @@ if (USE_SIL AND NOT WIN32)
 else()
 	target_link_libraries(game
 		mariadbclient
-		#cryptopp-static
+		cryptopp-static
 	)
 endif()
 
